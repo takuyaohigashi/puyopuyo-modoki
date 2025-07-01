@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ぷよぷよもどき
 
-## Getting Started
+Next.js + React + Tailwind CSS で作った「ぷよぷよ」風落ち物パズルゲームです。
 
-First, run the development server:
+![screenshot](./public/screenshot.png)
 
+## 遊び方
+- 画面上部から2つ1組のカラフルなぷよが落ちてきます。
+- 同じ色のぷよが縦横に4つ以上つながると消えます。
+- 連鎖も自動で発生します。
+- ぷよが積み上がって動かせなくなるとゲームオーバーです。
+
+## 操作方法
+- **← →**：左右に移動
+- **↓**：高速落下
+- **Z または ↑**：回転
+- **リトライボタン**：ゲームリセット
+
+## 技術構成
+- [Next.js 15 (App Router)](https://nextjs.org/)
+- [React 18](https://react.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- TypeScript
+- SVGによるぷよ描画（画像素材不要）
+
+## 開発・起動方法
 ```bash
+# 依存インストール
+npm install
+
+# 開発サーバー起動
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# ブラウザで http://localhost:3000 を開く
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ディレクトリ構成
+- `src/app/page.tsx` ... ゲーム本体
+- `src/app/globals.css` ... スタイル
+- `public/` ... 静的ファイル
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ライセンス
+MIT
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> このアプリは公式「ぷよぷよ」とは関係ありません。個人学習・デモ用です。
