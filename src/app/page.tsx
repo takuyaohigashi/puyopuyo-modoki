@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // import Image from "next/image";
 
-const PUYO_COLORS = ["red", "blue", "green", "yellow", "purple"] as const;
+const PUYO_COLORS = ["red", "blue", "green", "yellow"] as const;
 const FIELD_ROWS = 12;
 const FIELD_COLS = 6;
 const PUYO_SIZE = 56;
@@ -13,10 +13,10 @@ const COLOR_MAP: Record<string, string> = {
   blue: "#3498db",
   green: "#2ecc71",
   yellow: "#f1c40f",
-  purple: "#9b59b6",
 };
 
 function PuyoSVG({ color }: { color: string }) {
+  if (!color || !(color in COLOR_MAP)) return null;
   return (
     <svg width={PUYO_SIZE} height={PUYO_SIZE} viewBox="0 0 56 56" fill="none">
       <ellipse cx="28" cy="32" rx="24" ry="20" fill={COLOR_MAP[color]} />
@@ -76,10 +76,31 @@ function rotatePair(pair: PuyoPair, field: Field): PuyoPair {
     default: offset = [-1, 0];
   }
   const newChild: [number, number] = [pr + offset[0], pc + offset[1]];
+  // 通常回転
   if (canMove(field, [pair.positions[0], newChild])) {
     return {
       ...pair,
       positions: [pair.positions[0], newChild],
+      rotation: rot,
+    };
+  }
+  // 壁蹴り（左1マス）
+  const leftParent: [number, number] = [pr, pc - 1];
+  const leftChild: [number, number] = [newChild[0], newChild[1] - 1];
+  if (canMove(field, [leftParent, leftChild])) {
+    return {
+      ...pair,
+      positions: [leftParent, leftChild],
+      rotation: rot,
+    };
+  }
+  // 壁蹴り（右1マス）
+  const rightParent: [number, number] = [pr, pc + 1];
+  const rightChild: [number, number] = [newChild[0], newChild[1] + 1];
+  if (canMove(field, [rightParent, rightChild])) {
+    return {
+      ...pair,
+      positions: [rightParent, rightChild],
       rotation: rot,
     };
   }
@@ -168,11 +189,13 @@ export default function Home() {
   const [dropping, setDropping] = useState(true);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
+  const [paused, setPaused] = useState(false);
   const dropInterval = useRef<NodeJS.Timeout | null>(null);
+  const [erasing, setErasing] = useState<[number, number][][]>([]); // 消去中グループ
 
   // ゲームループ
   useEffect(() => {
-    if (gameOver) return;
+    if (gameOver || paused) return;
     if (!dropping) return;
     dropInterval.current = setInterval(() => {
       setPair((curPair) => {
@@ -184,11 +207,11 @@ export default function Home() {
         }
         return moved;
       });
-    }, 400);
+    }, 900);
     return () => {
       if (dropInterval.current) clearInterval(dropInterval.current);
     };
-  }, [dropping, field, gameOver]);
+  }, [dropping, field, gameOver, paused]);
 
   // 着地後の処理
   useEffect(() => {
@@ -203,15 +226,24 @@ export default function Home() {
         setPair(nextPair);
         setNextPair(createPuyoPair());
         setDropping(true);
+        setErasing([]);
         return;
       }
+      setErasing(groups);
       setTimeout(() => {
         setScore((s) => s + groups.reduce((acc, g) => acc + g.length, 0) * (chain + 1) * 10);
         tempField = eraseGroups(tempField, groups);
-        tempField = dropField(tempField);
-        chain++;
-        processChain();
-      }, 400);
+        setField(tempField);
+        setErasing([]); // 消去アニメーション終了
+        setTimeout(() => {
+          tempField = dropField(tempField);
+          setField(tempField);
+          setTimeout(() => {
+            chain++;
+            processChain();
+          }, 200); // 次の連鎖までの間
+        }, 300); // 落下アニメーション表示時間
+      }, 400); // 消去アニメーション表示時間
     }
     processChain();
     // eslint-disable-next-line
@@ -219,6 +251,7 @@ export default function Home() {
 
   // 新しいペア出現時のゲームオーバー判定
   useEffect(() => {
+    if (!pair) return;
     if (dropping && isGameOver(field, pair)) {
       setGameOver(true);
       setDropping(false);
@@ -228,7 +261,19 @@ export default function Home() {
   // キー操作
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (gameOver || !dropping) return;
+      if (gameOver) {
+        if (e.key === "Escape") handleReset();
+        return;
+      }
+      if (e.key === " ") {
+        setPaused((p) => !p);
+        return;
+      }
+      if (e.key === "Escape") {
+        handleReset();
+        return;
+      }
+      if (paused || !dropping) return;
       if (e.key === "ArrowLeft") {
         setPair((cur) => movePair(cur, field, 0, -1));
       } else if (e.key === "ArrowRight") {
@@ -239,7 +284,7 @@ export default function Home() {
         setPair((cur) => rotatePair(cur, field));
       }
     },
-    [field, dropping, gameOver]
+    [field, dropping, gameOver, paused]
   );
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -256,14 +301,34 @@ export default function Home() {
     setScore(0);
   };
 
-  // 描画用フィールド（落下中のペアも合成）
+  // 描画用フィールド（落下中のペアも合成、消去中は半透明）
   const drawField: Field = field.map((row) => [...row]);
-  if (!gameOver && dropping) {
+  if (!gameOver && dropping && pair) {
     pair.positions.forEach(([r, c], i) => {
       if (r >= 0 && r < FIELD_ROWS && c >= 0 && c < FIELD_COLS) {
         drawField[r][c] = pair.colors[i];
       }
     });
+  }
+  // 消去中のぷよを半透明で上書き
+  if (erasing.length > 0) {
+    erasing.forEach(group => {
+      group.forEach(([r, c]) => {
+        if (drawField[r][c]) drawField[r][c] = drawField[r][c] + "-erasing";
+      });
+    });
+  }
+
+  // PuyoSVGを拡張し、"-erasing"が付いた場合はopacityを下げる
+  function RenderPuyo({ cell }: { cell: string | null }) {
+    if (!cell) return null;
+    if (cell.endsWith("-erasing")) {
+      const color = cell.replace("-erasing", "");
+      if (!(color in COLOR_MAP)) return null;
+      return <div style={{ opacity: 0.3 }}><PuyoSVG color={color} /></div>;
+    }
+    if (!(cell in COLOR_MAP)) return null;
+    return <PuyoSVG color={cell} />;
   }
 
   return (
@@ -287,7 +352,7 @@ export default function Home() {
                   key={`${rowIdx}-${colIdx}`}
                   className="w-14 h-14 flex items-center justify-center transition-all"
                 >
-                  {cell && <PuyoSVG color={cell} />}
+                  {cell && <RenderPuyo cell={cell} />}
                 </div>
               ))
             )}
@@ -311,8 +376,8 @@ export default function Home() {
           <div className="bg-white/80 rounded-xl p-4 shadow border border-indigo-100">
             <div className="text-lg font-bold mb-2 text-indigo-500">次のぷよ</div>
             <div className="flex flex-col items-center gap-2">
-              <PuyoSVG color={nextPair.colors[0]} />
-              <PuyoSVG color={nextPair.colors[1]} />
+              <RenderPuyo cell={nextPair.colors[0]} />
+              <RenderPuyo cell={nextPair.colors[1]} />
             </div>
           </div>
           <div className="bg-white/80 rounded-xl p-4 shadow border border-indigo-100 text-center">
@@ -321,7 +386,9 @@ export default function Home() {
           </div>
         </div>
       </div>
-      <p className="mt-8 text-gray-500 text-base">矢印キー：移動／Z・↑：回転／下：高速落下</p>
+      <p className="mt-8 text-gray-500 text-base">
+        矢印キー：移動／Z・↑：回転／下：高速落下／スペース：一時停止／Esc：リセット
+      </p>
     </div>
   );
 }
