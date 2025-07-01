@@ -3,6 +3,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // import Image from "next/image";
 
+// サウンド効果用の関数
+function playChainSound(chainLevel: number) {
+  try {
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    // 連鎖レベルに応じて音程を変える（実際のぷよぷよのように）
+    const baseFreq = 200;
+    const frequency = baseFreq + (chainLevel * 100);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    oscillator.type = 'triangle'; // 柔らかい音色
+    
+    // 音量の調整（短時間で減衰）
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.3);
+  } catch {
+    // Web Audio APIが利用できない場合は何もしない
+    console.log('Audio context not available');
+  }
+}
+
 const PUYO_COLORS = ["red", "blue", "green", "yellow"] as const;
 const FIELD_ROWS = 12;
 const FIELD_COLS = 6;
@@ -230,6 +259,8 @@ export default function Home() {
         return;
       }
       setErasing(groups);
+      // 連鎖音を再生
+      playChainSound(chain + 1);
       setTimeout(() => {
         setScore((s) => s + groups.reduce((acc, g) => acc + g.length, 0) * (chain + 1) * 10);
         tempField = eraseGroups(tempField, groups);
